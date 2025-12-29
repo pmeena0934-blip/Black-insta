@@ -1,0 +1,85 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  deleteDoc,
+  where,
+  getDocs,
+  doc
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_WIMVeD5zvzNaUGWW48IbNrAl4vOwCSY",
+  authDomain: "black-insta-3cbb9.firebaseapp.com",
+  projectId: "black-insta-3cbb9",
+  storageBucket: "black-insta-3cbb9.appspot.com",
+  messagingSenderId: "69596985964",
+  appId: "1:69596985964:web:f5d83a8d1664a91d427649"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const feedDiv = document.getElementById("feed");
+let currentUserId = null;
+
+onAuthStateChanged(auth, (user) => {
+  if (user) currentUserId = user.uid;
+});
+
+const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+
+onSnapshot(q, async (snapshot) => {
+  feedDiv.innerHTML = "";
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    if (data.userId === currentUserId) continue;
+
+    const followQuery = query(
+      collection(db, "follows"),
+      where("followerId", "==", currentUserId),
+      where("followingId", "==", data.userId)
+    );
+    const followSnap = await getDocs(followQuery);
+    const isFollowing = !followSnap.empty;
+
+    feedDiv.innerHTML += `
+      <div style="margin:15px;border-bottom:1px solid #333">
+        <p>${data.userEmail}</p>
+        <img src="${data.mediaUrl}" width="100%" />
+        <button onclick="toggleFollow('${data.userId}', ${isFollowing})">
+          ${isFollowing ? "Unfollow" : "Follow"}
+        </button>
+      </div>
+    `;
+  }
+});
+
+// follow / unfollow
+window.toggleFollow = async (userId, isFollowing) => {
+  if (!currentUserId) return alert("Login required");
+
+  const followRef = collection(db, "follows");
+
+  if (isFollowing) {
+    const q = query(
+      followRef,
+      where("followerId", "==", currentUserId),
+      where("followingId", "==", userId)
+    );
+    const snap = await getDocs(q);
+    snap.forEach(d => deleteDoc(d.ref));
+  } else {
+    await addDoc(followRef, {
+      followerId: currentUserId,
+      followingId: userId
+    });
+  }
+};
